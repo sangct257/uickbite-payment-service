@@ -3,7 +3,45 @@ name: Payment Service CI
 on:
   push:
     branches:
+      - mainname: Verify GHCR Image Pull
+
+on:
+  push:
+    branches:
       - main
+  workflow_dispatch:
+
+# Cấp quyền đọc mã nguồn và đọc GitHub Packages cho GITHUB_TOKEN
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  pull-and-verify:
+    name: Pull and Verify Image from GHCR
+    runs-on: [self-hosted, dood-runner]
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Pull and Run Verification Container
+        env:
+          REPO_OWNER: ${{ github.repository_owner }}
+        run: |
+          # Chuyển tên chủ sở hữu/repo sang chữ thường để tránh lỗi định dạng của GHCR
+          OWNER_LOWER=$(echo "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
+          IMAGE_TAG="ghcr.io/${OWNER_LOWER}/payment-service:1.0.0"
+
+          echo "Pulling image: $IMAGE_TAG"
+          docker pull "$IMAGE_TAG"
+
+          # Dọn dẹp container verify cũ (nếu có) và khởi chạy container mới ở chế độ nền (-d)
+          docker rm -f payment-service-verify || true
+          docker run -d --name payment-service-verify "$IMAGE_TAG"
+
+          # Kiểm tra container đang hoạt động
+          docker ps -f name=payment-service-verify
 
 jobs:
   test:
